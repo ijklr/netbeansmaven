@@ -40,14 +40,18 @@ public class CacheWithTTL {
                         TimeUnit.MILLISECONDS, executorService)
                         .exceptionally(ex -> Optional.empty());
         
-        return storageReadF.thenCompose(storageRead ->
-                storageRead.isEmpty() ?
-                        makeTimeoutFuture(slowApi.read(key), slowAPITTL, 
+        return storageReadF.thenCompose(storageRead -> {
+                if (storageRead.isEmpty()) {
+                    CompletionStage<Optional<String>> resultF = 
+                            slowApi.read(key).thenCompose(str -> storage.write(key, str));                  
+                    return
+                        makeTimeoutFuture(resultF, slowAPITTL, 
                         TimeUnit.MILLISECONDS, executorService)
-                        .exceptionally(ex -> Optional.empty()) 
-                        :
-                        CompletableFuture.completedFuture(storageRead)
-        );
+                        .exceptionally(ex -> Optional.empty());
+                } else {
+                    return CompletableFuture.completedFuture(storageRead);
+                } 
+        });
     }
     
     public static <V extends Object> CompletableFuture<V> makeTimeoutFuture(
@@ -65,21 +69,22 @@ public class CacheWithTTL {
     }
     
     public static void main(final String[] args) {
+        System.out.println("Started testing");
         CacheStorage cacheStorage = new CacheStorage();
-        SlowAPI slowApi = (key) -> {
+        SlowAPI slowApi = (key) ->               
+              CompletableFuture.supplyAsync(
+                () -> {
             try {
-                Thread.sleep(2000);
+                Thread.sleep(300);
             } catch (InterruptedException ex) {
                 Logger.getLogger(CacheWithTTL.class.getName()).log(Level.SEVERE, null, ex);
             }
-            return CompletableFuture.completedFuture(Optional.of("found " + key));        
-        };
+            return Optional.of("found " + key);        
+        });
         
-        CacheWithTTL cacheWithTTL = new CacheWithTTL(cacheStorage, slowApi, 50, 100);
+        CacheWithTTL cacheWithTTL = new CacheWithTTL(cacheStorage, slowApi, 20, 200);
         CompletionStage<Optional<String>> read = cacheWithTTL.read("some key");
         Optional<String> result = read.toCompletableFuture().join();
         System.out.println("result====" + result.orElse("timedout"));
     }
-    
-    
 }

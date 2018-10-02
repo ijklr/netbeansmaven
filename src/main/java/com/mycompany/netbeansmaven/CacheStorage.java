@@ -15,13 +15,13 @@ public class CacheStorage {
     public CacheStorage() {
         this.storage = new HashMap<>();
     }
-    public CompletionStage<Boolean> write(final String key, 
+    public CompletionStage<Optional<String>> write(final String key, 
             final Optional<String> value) {
      if(key == null) {
-         return CompletableFuture.completedFuture(Boolean.FALSE);
+         return CompletableFuture.completedFuture(Optional.empty());
      }
      storage.put(key, value);
-     return CompletableFuture.completedFuture(Boolean.TRUE);
+     return CompletableFuture.completedFuture(value);
     }
     
     public CompletionStage<Optional<String>> read(final String key) {
